@@ -28,6 +28,7 @@
 
 (require 'cl-lib)
 (require 'company)
+(require 'company-template)
 (require 'tern)
 (require 'dash)
 (require 'dash-functional)
@@ -47,6 +48,11 @@ This also can be nil to disable property markers."
 
 (defcustom company-tern-meta-as-single-line nil
   "Trim candidate type information to frame width?"
+  :type 'boolean
+  :group 'company-tern)
+
+(defcustom company-tern-insert-arguments t
+  "When non-nil, insert function arguments as a template after completion."
   :type 'boolean
   :group 'company-tern)
 
@@ -149,6 +155,14 @@ Use CALLBACK function to display candidates."
                (annot (if company-tooltip-align-annotations "%s" " -> %s")))
     (format annot type)))
 
+(defun company-tern-function-arguments (candidate)
+  "Return function arguments for CANDIDATE."
+  (--when-let (get-text-property 0 'type candidate)
+    (let ((full-sig (if company-tooltip-align-annotations (substring it 2) it)))
+      (-if-let (ret-pos (string-match-p ") " full-sig))
+	  (substring full-sig 0 (+ 1 ret-pos))
+	full-sig))))
+
 ;;;###autoload
 (defun company-tern (command &optional arg &rest _args)
   "Tern backend for company-mode.
@@ -164,7 +178,12 @@ See `company-backends' for more info about COMMAND and ARG."
     (sorted t)
     (candidates (cons :async
                       (lambda (callback)
-                        (company-tern-candidates-query arg callback))))))
+                        (company-tern-candidates-query arg callback))))
+    (post-completion (when (and company-tern-insert-arguments
+				(company-tern-function-p arg))
+		       (let ((anno (company-tern-function-arguments arg)))
+			 (insert anno)
+			 (company-template-c-like-templatify anno))))))
 
 (provide 'company-tern)
 
